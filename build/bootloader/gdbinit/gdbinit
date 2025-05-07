@@ -1,0 +1,2 @@
+source C:/temp/Visual/esp32_bno08x_driver/build/bootloader/gdbinit/symbols
+source C:/temp/Visual/esp32_bno08x_driver/build/bootloader/gdbinit/connect

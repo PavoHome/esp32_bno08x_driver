@@ -117,108 +117,103 @@ To use two (or more) BNO08x sensors, you need to:
 
 static const char *TAG_MAIN = "APP_MAIN";
 
-// Define GPIOs for the second sensor
-// Ensure these pins are not conflicting with other peripherals or the first sensor
-#define BNO08X_SENSOR2_SPI_HOST   SPI2_HOST // Or SPI3_HOST, or the same as sensor 1 if sharing bus
-#define BNO08X_SENSOR2_GPIO_MOSI  GPIO_NUM_23 // Example, ensure this matches your SPI host's MOSI
-#define BNO08X_SENSOR2_GPIO_MISO  GPIO_NUM_19 // Example, ensure this matches your SPI host's MISO
-#define BNO08X_SENSOR2_GPIO_SCLK  GPIO_NUM_18 // Example, ensure this matches your SPI host's SCLK
-#define BNO08X_SENSOR2_GPIO_CS    GPIO_NUM_2  // Example - MUST BE DIFFERENT FROM SENSOR 1's CS
-#define BNO08X_SENSOR2_GPIO_INT   GPIO_NUM_4  // Example - MUST BE DIFFERENT FROM SENSOR 1's INT
-#define BNO08X_SENSOR2_GPIO_RST   GPIO_NUM_15 // Example
-#define BNO08X_SENSOR2_GPIO_WAKE  GPIO_NUM_NC // Example, or a valid GPIO if used
+// Define GPIOs for the sensors based on pin.md
+// Shared SPI pins
+#define BNO08X_GPIO_MOSI  GPIO_NUM_23
+#define BNO08X_GPIO_MISO  GPIO_NUM_18
+#define BNO08X_GPIO_SCLK  GPIO_NUM_19
+
+// BASE Sensor Pins
+#define BNO08X_BASE_SENSOR_GPIO_CS    GPIO_NUM_5
+#define BNO08X_BASE_SENSOR_GPIO_INT   GPIO_NUM_21
+#define BNO08X_BASE_SENSOR_GPIO_RST   GPIO_NUM_22
+#define BNO08X_BASE_SENSOR_GPIO_WAKE  GPIO_NUM_NC // Assuming WAKE is not used
+
+// HEAD Sensor Pins
+#define BNO08X_HEAD_SENSOR_GPIO_CS    GPIO_NUM_4
+#define BNO08X_HEAD_SENSOR_GPIO_INT   GPIO_NUM_27
+#define BNO08X_HEAD_SENSOR_GPIO_RST   GPIO_NUM_26
+#define BNO08X_HEAD_SENSOR_GPIO_WAKE  GPIO_NUM_NC // Assuming WAKE is not used
 
 // Declare BNO08x device handles
-BNO08x imu1;
-BNO08x imu2;
+BNO08x imu_base;
+BNO08x imu_head;
 
-// Callback for IMU1
-void imu1_data_cb(void *arg) {
+// Callback for BASE Sensor
+void imu_base_data_cb(void *arg) {
     BNO08x *imu = (BNO08x *)arg;
     // Example: Get rotation vector data
     float i, j, k, real, acc_rad;
     uint8_t acc_int;
     BNO08x_get_quat(imu, &i, &j, &k, &real, &acc_rad, &acc_int);
-    ESP_LOGI("IMU1_CB", "Quat I: %.3f J: %.3f K: %.3f Real: %.3f Acc: %d", i, j, k, real, acc_int);
+    ESP_LOGI("IMU_BASE_CB", "Quat I: %.3f J: %.3f K: %.3f Real: %.3f Acc: %d", i, j, k, real, acc_int);
 }
 
-// Callback for IMU2
-void imu2_data_cb(void *arg) {
+// Callback for HEAD Sensor
+void imu_head_data_cb(void *arg) {
     BNO08x *imu = (BNO08x *)arg;
-    // Example: Get accelerometer data
-    float x, y, z;
-    uint8_t acc;
-    BNO08x_get_accel(imu, &x, &y, &z, &acc);
-    ESP_LOGI("IMU2_CB", "Accel X: %.3f Y: %.3f Z: %.3f Acc: %d", x, y, z, acc);
+    // Example: Get rotation vector data
+    float i, j, k, real, acc_rad;
+    uint8_t acc_int;
+    BNO08x_get_quat(imu, &i, &j, &k, &real, &acc_rad, &acc_int);
+    ESP_LOGI("IMU_HEAD_CB", "Quat I: %.3f J: %.3f K: %.3f Real: %.3f Acc: %d", i, j, k, real, acc_int);
 }
 
-
-void app_main(void)
-{
-    ESP_LOGI(TAG_MAIN, "Starting application...");
-
-    // Configuration for Sensor 1 (using defaults from menuconfig, or define manually)
-    // If using DEFAULT_IMU_CONFIG, ensure menuconfig settings are for your first sensor.
-    BNO08x_config_t cfg1 = DEFAULT_IMU_CONFIG;
-    // Example of manual configuration for sensor 1 if not using menuconfig defaults:
-    /*
-    BNO08x_config_t cfg1 = {
-        .spi_peripheral = SPI2_HOST, // or SPI3_HOST
-        .io_mosi = GPIO_NUM_13,      // ESP32 default VSPI MOSI
-        .io_miso = GPIO_NUM_12,      // ESP32 default VSPI MISO
-        .io_sclk = GPIO_NUM_14,      // ESP32 default VSPI SCLK
-        .io_cs = GPIO_NUM_15,        // CS for sensor 1
-        .io_int = GPIO_NUM_27,       // INT for sensor 1
-        .io_rst = GPIO_NUM_26,       // RST for sensor 1
-        .io_wake = GPIO_NUM_NC,      // WAKE for sensor 1 (if not used)
+void app_main(void) {
+    // Configuration for BASE Sensor
+    BNO08x_config_t cfg_base = {
+        .spi_peripheral = SPI2_HOST, // Or SPI3_HOST, ensure this is a valid SPI host
+        .io_mosi = BNO08X_GPIO_MOSI,
+        .io_miso = BNO08X_GPIO_MISO,
+        .io_sclk = BNO08X_GPIO_SCLK,
+        .io_cs = BNO08X_BASE_SENSOR_GPIO_CS,
+        .io_int = BNO08X_BASE_SENSOR_GPIO_INT,
+        .io_rst = BNO08X_BASE_SENSOR_GPIO_RST,
+        .io_wake = BNO08X_BASE_SENSOR_GPIO_WAKE,
         .sclk_speed = 3000000UL,     // 3 MHz
-        .cpu_spi_intr_affinity = CONFIG_ESP32_BNO08X_SPI_INTR_CPU_AFFINITY // Or 0 or 1
-    };
-    */
-
-
-    // Configuration for Sensor 2 (manual configuration)
-    BNO08x_config_t cfg2 = {
-        .spi_peripheral = BNO08X_SENSOR2_SPI_HOST, // Can be same as cfg1.spi_peripheral if sharing bus
-        .io_mosi = BNO08X_SENSOR2_GPIO_MOSI,       // Must be same as cfg1.io_mosi if sharing bus
-        .io_miso = BNO08X_SENSOR2_GPIO_MISO,       // Must be same as cfg1.io_miso if sharing bus
-        .io_sclk = BNO08X_SENSOR2_GPIO_SCLK,       // Must be same as cfg1.io_sclk if sharing bus
-        .io_cs = BNO08X_SENSOR2_GPIO_CS,           // Must be unique
-        .io_int = BNO08X_SENSOR2_GPIO_INT,         // Must be unique
-        .io_rst = BNO08X_SENSOR2_GPIO_RST,         // Can be unique or shared if reset simultaneously
-        .io_wake = BNO08X_SENSOR2_GPIO_WAKE,       // Can be unique or shared
-        .sclk_speed = 3000000UL,                   // 3 MHz, must be same as cfg1.sclk_speed if sharing bus
-        .cpu_spi_intr_affinity = CONFIG_ESP32_BNO08X_SPI_INTR_CPU_AFFINITY // Or specific core
+        .cpu_spi_intr_affinity = CONFIG_ESP32_BNO08X_SPI_INTR_CPU_AFFINITY // Or 0 or 1 or a specific core
     };
 
-    ESP_LOGI(TAG_MAIN, "Initializing IMU1...");
-    BNO08x_init(&imu1, &cfg1);
-    if (BNO08x_initialize(&imu1)) {
-        ESP_LOGI(TAG_MAIN, "IMU1 Initialized.");
-        BNO08x_register_cb(&imu1, imu1_data_cb);
-        // Enable a report for IMU1, e.g., Rotation Vector at 20Hz (50ms)
-        BNO08x_enable_rotation_vector(&imu1, 50000UL);
+    // Configuration for HEAD Sensor
+    BNO08x_config_t cfg_head = {
+        .spi_peripheral = SPI2_HOST, // Using the same SPI host as the BASE sensor
+        .io_mosi = BNO08X_GPIO_MOSI,
+        .io_miso = BNO08X_GPIO_MISO,
+        .io_sclk = BNO08X_GPIO_SCLK,
+        .io_cs = BNO08X_HEAD_SENSOR_GPIO_CS,
+        .io_int = BNO08X_HEAD_SENSOR_GPIO_INT,
+        .io_rst = BNO08X_HEAD_SENSOR_GPIO_RST,
+        .io_wake = BNO08X_HEAD_SENSOR_GPIO_WAKE,
+        .sclk_speed = 3000000UL,     // 3 MHz
+        .cpu_spi_intr_affinity = CONFIG_ESP32_BNO08X_SPI_INTR_CPU_AFFINITY // Or 0 or 1 or a specific core
+    };
+
+    ESP_LOGI(TAG_MAIN, "Initializing BASE IMU...");
+    BNO08x_init(&imu_base, &cfg_base);
+    if (BNO08x_initialize(&imu_base)) {
+        ESP_LOGI(TAG_MAIN, "BASE IMU Initialized.");
+        BNO08x_register_cb(&imu_base, imu_base_data_cb);
+        // Enable a report for BASE IMU, e.g., Rotation Vector at 50ms (20Hz)
+        BNO08x_enable_rotation_vector(&imu_base, 50000UL);
     } else {
-        ESP_LOGE(TAG_MAIN, "Failed to initialize IMU1.");
+        ESP_LOGE(TAG_MAIN, "Failed to initialize BASE IMU.");
     }
 
-    ESP_LOGI(TAG_MAIN, "Initializing IMU2...");
-    BNO08x_init(&imu2, &cfg2);
-    if (BNO08x_initialize(&imu2)) {
-        ESP_LOGI(TAG_MAIN, "IMU2 Initialized.");
-        BNO08x_register_cb(&imu2, imu2_data_cb);
-        // Enable a different report for IMU2, e.g., Accelerometer at 10Hz (100ms)
-        BNO08x_enable_accelerometer(&imu2, 100000UL);
+    ESP_LOGI(TAG_MAIN, "Initializing HEAD IMU...");
+    BNO08x_init(&imu_head, &cfg_head);
+    if (BNO08x_initialize(&imu_head)) {
+        ESP_LOGI(TAG_MAIN, "HEAD IMU Initialized.");
+        BNO08x_register_cb(&imu_head, imu_head_data_cb);
+        // Enable a report for HEAD IMU, e.g., Rotation Vector at 50ms (20Hz)
+        BNO08x_enable_rotation_vector(&imu_head, 50000UL);
     } else {
-        ESP_LOGE(TAG_MAIN, "Failed to initialize IMU2.");
+        ESP_LOGE(TAG_MAIN, "Failed to initialize HEAD IMU.");
     }
 
-    ESP_LOGI(TAG_MAIN, "Application main loop started. IMU data will be logged via callbacks.");
-    while (1)
-    {
-        // Main loop can do other things or just delay
-        // Data is handled by the callbacks in this example
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    // Your main application loop can go here
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second
     }
 }
+
 ```
