@@ -462,9 +462,6 @@ uint16_t BNO08x_parse_command_report(BNO08x *device, bno08x_rx_packet_t *packet)
 
 #define HOST_INT_TIMEOUT_MS 300ULL
 
-// ISR service installation flag
-extern bool bno08x_isr_service_installed;
-
 // Function prototypes for ISR and task handling
 void IRAM_ATTR BNO08x_hint_handler(void *arg);
 void BNO08x_spi_task(void *arg);

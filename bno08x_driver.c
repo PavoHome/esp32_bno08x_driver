@@ -8,7 +8,8 @@
  */
 #include "bno08x_driver.h"
 
-bool bno08x_isr_service_installed = false;
+static bool bno08x_isr_service_installed = false;
+static bool spi_bus_initialized[SPI_HOST_MAX] = {false}; // Track initialized SPI buses
 
 static const char *TAG = "imu[bno08x]";
 /**
@@ -91,17 +92,59 @@ void BNO08x_init(BNO08x *device, BNO08x_config_t *imu_config)
     // check if GPIO ISR service has been installed (only has to be done once regardless of SPI slaves being used)
     if (!bno08x_isr_service_installed)
     {
-        gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1); // install isr service
-        bno08x_isr_service_installed = true;
+        esp_err_t ret_isr_service = gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1); // install isr service
+        if (ret_isr_service == ESP_OK)
+        {
+            bno08x_isr_service_installed = true;
+        }
+        else if (ret_isr_service == ESP_ERR_INVALID_STATE)
+        {
+            // Already installed, which is fine.
+            bno08x_isr_service_installed = true;
+        }
+        else
+        {
+            ESP_LOGE(TAG, "Failed to install GPIO ISR service: %s", esp_err_to_name(ret_isr_service));
+            // Potentially abort or handle error, for now, we proceed but log
+        }
     }
 
     ESP_ERROR_CHECK(gpio_isr_handler_add(imu_config->io_int, BNO08x_hint_handler, (void *)device));
     gpio_intr_disable(imu_config->io_int); // disable interrupts initially before reset
 
-    // initialize the spi peripheral
-    spi_bus_initialize(imu_config->spi_peripheral, &(device->bus_config), SPI_DMA_CH_AUTO);
+    // initialize the spi peripheral if not already done for this host
+    if (imu_config->spi_peripheral >= 0 && imu_config->spi_peripheral < SPI_HOST_MAX)
+    {
+        if (!spi_bus_initialized[imu_config->spi_peripheral])
+        {
+            esp_err_t ret_bus_init = spi_bus_initialize(imu_config->spi_peripheral, &(device->bus_config), SPI_DMA_CH_AUTO);
+            if (ret_bus_init == ESP_OK)
+            {
+                spi_bus_initialized[imu_config->spi_peripheral] = true;
+            }
+            else if (ret_bus_init == ESP_ERR_INVALID_STATE)
+            {
+                // Bus already initialized by another device or a previous call, which is acceptable.
+                spi_bus_initialized[imu_config->spi_peripheral] = true; // Mark as initialized
+                ESP_LOGI(TAG, "SPI bus %d already initialized.", imu_config->spi_peripheral);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Failed to initialize SPI bus %d: %s", imu_config->spi_peripheral, esp_err_to_name(ret_bus_init));
+                // Critical error, aborting. Consider a more graceful error handling if BNO08x_init could return a status.
+                ESP_ERROR_CHECK(ret_bus_init);
+            }
+        }
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Invalid SPI peripheral specified: %d", imu_config->spi_peripheral);
+        // Abort or handle error
+        return;
+    }
+    
     // add the imu device to the bus
-    spi_bus_add_device(imu_config->spi_peripheral, &(device->imu_spi_config), &(device->spi_hdl));
+    ESP_ERROR_CHECK(spi_bus_add_device(imu_config->spi_peripheral, &(device->imu_spi_config), &(device->spi_hdl)));
 
     // do first SPI operation into nowhere before BNO085 reset to let periphiral stabilize (Anton B.)
     device->spi_transaction.length = 8;
